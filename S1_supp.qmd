@@ -3,6 +3,8 @@ title: "Supplementary material"
 format: 
   typst:
     papersize: a4
+    mainfont: "Calibri"
+    fontsize: 11pt
     margin: 
       x: 2.5cm
       y: 2.5cm
@@ -18,15 +20,17 @@ knitr::opts_chunk$set(
 )
 ```
 
-
-
 ```{r}
 #| id: Cargar paquetes
 pacman::p_load(
   rio,
   janitor,
+  epiR,
+  epikit,
+  GGally,
   gtsummary,
   labelled,
+  flextable,
   tidyverse
 )
 ```
@@ -35,88 +39,18 @@ pacman::p_load(
 ```{r}
 #| id: Cargar datos KAP dengue
 ## KAP dengue ----
-datos <- import("clean/kap_dengue_clean.xlsx") |>
-
-  # Cambiar etiquetas barrio
-  mutate(
-    barrio = case_when(
-      barrio == "Chalet" ~ "CH",
-      barrio == "Colastiné Sur" ~ "CS",
-      TRUE ~ "VP"
-    )
-  ) |>
-
-  # Variable respuesta binomial
-  mutate(dengue = if_else(ELISA_dengue == "POS", 1, 0)) |>
-
-  # Categorizar problemas en el barrio
-  mutate(
-    act_problemas_barrio_cat = if_else(is.na(act_problemas_barrio), 0, 1),
-    .after = act_problemas_barrio
-  ) |>
-
-  # Cambiar niveles dengue previo
-  mutate(dengue_previo = if_else(dengue_previo == "Si", 1, 0)) |>
-
-  # Cambiar niveles conoce algún síntoma
-  mutate(
-    con_sintomas = case_when(
-      con_sintomas == 0 ~ "None",
-      con_sintomas == 1 ~ "Fever only",
-      con_sintomas == 2 ~ "Fever and other symptom/s"
-    )
-  )
+datos <- import(file = "clean/kap_dengue.rds")
 ```
 
-### S1 Table. Demographic data of the study participants (n = `r nrow(datos)`)
+### Table S1. Demographic data of the study participants (n = `r nrow(datos)`)
 
 ```{r}
 #| id: Tabla demográficos x barrio
 datos |>
-  select(barrio, genero:ocupacion_cat) |>
-
-  # Cambiar etiquetas sexo
-  mutate(genero = fct_relabel(genero, ~ c("Female", "Male"))) |>
-
-  # Cambiar etiquetas nivel educativo
-  mutate(
-    educacion_cat = fct_relabel(
-      educacion_cat,
-      ~ c(
-        "None/incomplete primary school",
-        "Primary school",
-        "High school/university"
-      )
-    )
-  ) |>
-
-  # Cambiar etiquetas ocupación
-  mutate(
-    ocupacion_cat = fct_relabel(
-      ocupacion_cat,
-      ~ c(
-        "Employed",
-        "Unemployed/underemployed",
-        "Homemaker/student",
-        "Retired/pensioner"
-      )
-    )
-  ) |>
-
-  # Etiquetar columnas
-  set_variable_labels(
-    .labels = list(
-      genero = "Sex",
-      edad = "Age (years)",
-      edad_cat = "Age group",
-      educacion_cat = "Education",
-      ocupacion_cat = "Occupation"
-    )
-  ) |>
-
   # Generar tabla
   tbl_summary(
     by = barrio,
+    include = c(genero:ocupacion),
     missing = "no",
     digits = list(all_categorical() ~ c(0, 1))
   ) |>
@@ -124,58 +58,30 @@ datos |>
   # Añadir significancia
   add_overall() |>
   add_p(pvalue_fun = label_style_pvalue(digits = 3)) |>
-  bold_p()
+  bold_p() |>
+
+  # Formato flextable
+  as_flex_table() |>
+  autofit()
 ```
 
 \newpage
 
-### S2 Table. Knowledge about dengue by neighborhood  (n = `r nrow(datos)`)
+### Table S2. Knowledge about dengue by neighborhood  (n = `r nrow(datos)`)
 
 ```{r}
 #| id: Tabla conocimientos x barrio
 datos |>
-  # Asignar etiquetas a nombres de columnas
-  set_variable_labels(
-    .labels = list(
-      barrio = "Site",
-      conoce_dengue = "Is aware of dengue",
-      con_alguien = "Knows someone with dengue",
-      con_alguien_barrio = "From neighborhood",
-      con_alguien_hogar = "From household",
-      dengue_previo = "Had dengue themself",
-      con_sintomas = "Knows any symptom",
-      con_sint_fiebre = "Fever",
-      con_sint_cefalea = "Headache",
-      con_sint_mialgia = "Myalgia",
-      con_sint_diarrea = "Diarrhea",
-      con_sint_nau_vom = "Nausea/vomiting",
-      con_sint_malestar = "Malaise",
-      con_sint_cansancio = "Fatigue",
-      con_sint_sarpullido = "Skin rash",
-      con_sint_sangrado = "Hemorrhage",
-      con_sint_gripal = "Influenza-like symptoms",
-      con_sint_mareos = "Dizzyness",
-      con_sint_dol_ojos = "Retro-orbital pain",
-      con_trasm_ns = "Doesn't know any way of transmission",
-      con_trasm_mosquito = "Mosquito bites",
-      con_trasm_cacharros = "Water containers",
-      con_trasm_viaje = "Travel to endemic areas",
-      con_trasm_personas = "Contact with infected people",
-      sc_conocimientos = "Knowledge score"
-    )
-  ) |>
-
   # Generar tabla
   tbl_summary(
     by = barrio,
     include = c(
       conoce_dengue:con_alguien_hogar,
       dengue_previo,
-      con_sintomas,
       con_sint_fiebre:con_sint_dol_ojos,
+      con_sint_ns,
       con_trasm_mosquito:con_trasm_viaje,
-      con_trasm_ns,
-      sc_conocimientos
+      con_trasm_ns
     ),
     missing = "no",
     digits = list(all_categorical() ~ c(0, 1)),
@@ -196,66 +102,28 @@ datos |>
   # Agrupar variables síntomas
   add_variable_group_header(
     header = "Dengue symptoms",
-    variables = con_sintomas:con_sint_dol_ojos
+    variables = con_sint_fiebre:con_sint_ns
   ) |>
 
   # Agrupar variables transmisión
   add_variable_group_header(
     header = "Ways of transmission",
     variables = con_trasm_mosquito:con_trasm_ns
-  )
+  ) |>
+
+  # Formato flextable
+  as_flex_table() |>
+  autofit()
 ```
 
 \newpage
 
-### S3 Table. Perceptions of the risk of dengue compared to leptospirosis among participants (n = `r nrow(datos)`)
+### Table S3. Perceptions of the risk of dengue compared to leptospirosis among participants (n = `r nrow(datos)`)
 
 ```{r}
 #| id: Tabla frecuencias actitudes
 datos |>
-  # Cambiar niveles variables actitudes
-  mutate(across(
-    .cols = starts_with("act_mas"),
-    .fns = ~ case_when(
-      .x == "Igual" ~ "Both",
-      .x == "Ninguna/no sabe" ~ "None/not sure",
-      .default = .x
-    ) |>
-      fct_relevel("Both", after = 2)
-  )) |>
-
-  # Cambiar niveles acciones
-  mutate(
-    act_sint6m_acciones = fct_relabel(
-      act_sint6m_acciones,
-      ~ c("Sought medical care", "None", "Other/s", "Self-medicated")
-    ) |>
-      fct_relevel("Self-medicated", after = 1)
-  ) |>
-
-  # Asignar etiquetas a nombres de columnas
-  set_variable_labels(
-    .labels = list(
-      barrio = "Site",
-      act_mas_miedo = "Most fear of contagion",
-      act_mas_expuesto = "More risk of infection",
-      act_mas_afecta = "Higher prevalence",
-      act_mas_publicidad = "More publicity",
-      act_sint6m_alguno = "Any dengue symptom",
-      act_sint6m_fiebre = "Fever",
-      act_sint6m_cefalea = "Headache",
-      act_sint6m_mialgia = "Myalgia",
-      act_sint6m_vom_diarrea = "Diarrhea/vomiting",
-      act_sint6m_sarpullido = "Skin rash",
-      act_sint6m_malestar = "Malaise",
-      act_sint6m_acciones = "Action taken",
-      act_problemas_barrio_cat = "Issues with the neighborhood",
-      act_problema_dengue = "Dengue as an issue in the neighborhood",
-      act_mejoras_barrio = "Neighborhood improvements"
-    )
-  ) |>
-
-  # Genera tabla
+  # Generar tabla
   tbl_summary(
     by = barrio,
     include = c(
@@ -266,12 +134,201 @@ datos |>
     digits = list(all_categorical() ~ c(0, 1))
   ) |>
 
-  # Añade significancia
+  # Añadir significancia
   add_overall() |>
   add_p(test.args = all_tests("fisher.test") ~ list(simulate.p.value = T)) |>
   bold_p() |>
-  bold_labels()
+
+  # Agrupar variables síntomas febrilews
+  add_variable_group_header(
+    header = "Febrile illness symptoms (6 months)",
+    variables = act_sint6m_alguno:act_sint6m_acciones
+  ) |>
+
+  # Formato flextable
+  as_flex_table() |>
+  autofit()
 ```
 
 \newpage
-###
+### Table S4. Preventive practices against dengue among the study participants  (n = `r nrow(datos)`)
+
+```{r}
+#| id: Tabla prácticas x barrio
+datos |>
+  # Generar tabla
+  tbl_summary(
+    by = barrio,
+    include = starts_with("prac") & !matches("prac_cacharros"),
+    missing = "no",
+    digits = list(all_categorical() ~ c(0, 1))
+  ) |>
+
+  # Añadir significancia
+  add_overall() |>
+  add_p(test.args = all_tests("fisher.test") ~ list(simulate.p.value = T)) |>
+  bold_p() |>
+
+  # Agrupar variables síntomas
+  add_variable_group_header(
+    header = "Avoids storage of environmental water",
+    variables = prac_no_cacharros:prac_no_agua_lluvia
+  ) |>
+
+  # Agrupar variables transmisión
+  add_variable_group_header(
+    header = "Garbage disposal",
+    variables = prac_resid_camion:prac_resid_no_rio
+  ) |>
+
+  # Formato flextable
+  as_flex_table() |>
+  autofit()
+```
+
+\newpage
+### Table S5. KAP scores by neighborhood (n = `r nrow(datos)`)
+
+```{r}
+#| id: Tabla scores KAPS por barrio
+datos |>
+  ## Generar tabla
+  tbl_summary(
+    by = barrio,
+    include = starts_with("sc_"),
+    type = list(starts_with("sc_") ~ "continuous")
+  ) |>
+
+  # Añadir significancia
+  add_overall() |>
+  add_p(test.args = all_tests("fisher.test") ~ list(simulate.p.value = T)) |>
+  bold_p() |>
+
+  # Formato flextable
+  as_flex_table() |>
+  autofit()
+```
+
+### Figure S6. Kendall's correlation among KAP scores.
+
+```{r}
+#| id: Correlograma de Kendall
+datos |>
+  select(
+    "Knowledge" = sc_conocimientos,
+    "Attitudes" = sc_actitudes,
+    "Practices" = sc_practicas
+  ) |>
+
+  ggcorr(
+    method = c("pairwise", "kendall"),
+    label = TRUE,
+    label_round = 3
+  ) +
+
+  scico::scale_fill_scico(palette = "tokyo", direction = -1, begin = .75)
+``` 
+
+\newpage
+### Table S7. ELISA positivity and DENV-seroprevalence by neighborhood (n = `r nrow(datos)`)
+
+```{r}
+#| id: Seropositividad
+# Calcular frecuencias por barrio
+datos_tabla <- datos |>
+  tabyl(barrio, ELISA_dengue) |>
+  adorn_totals(where = c("row", "col"))
+
+# Calcular prevalencias ajustadas
+prev <- epi.prev(
+  pos = datos_tabla$POS,
+  tested = datos_tabla$Total,
+  se = 0.96,
+  sp = 0.93,
+  units = 1
+) |>
+  modify_at(
+    c("ap", "tp"),
+    ~ unite_ci(
+      .x,
+      e = "est",
+      l = "lower",
+      u = "upper",
+      m100 = TRUE,
+      digits = 1,
+      percent = TRUE
+    )
+  ) |>
+  modify_at(
+    c("test.positive", "true.positive", "false.positive"),
+    ~ unite_ci(
+      .x,
+      e = "est",
+      l = "lower",
+      u = "upper",
+      m100 = FALSE,
+      digits = 0
+    )
+  )
+
+## Generar tabla
+datos_tabla |>
+  mutate(
+    "Positives_True" = prev$true.positive$est,
+    "Positives_False" = prev$false.positive$est,
+    "Seroprevalence_Apparent" = prev$ap$est,
+    "Seroprevalence_True" = prev$tp$est
+  ) |>
+
+  select(Site = barrio, Total, "Positives_Test" = POS, everything(), -NEG) |>
+
+  flextable() |>
+  separate_header(opts = c("span-top", "bottom-vspan")) |>
+  align(align = "center", part = "header") |>
+  bold(bold = TRUE, part = "header") |>
+  bold(i = 4, j = 1) |>
+  autofit()
+```
+
+\newpage
+### Table S8. Univariate logistic regressions 
+
+```{r}
+#| id: Tabla regresiones univariadas
+datos_tabla <- datos |>
+  # Seleccionar columnas relevantes
+  select(
+    barrio,
+    dengue,
+    genero:ocupacion,
+    viv_tipo_calle:viv_acum_agua30d,
+    viv_fuente_agua,
+    con_alguien,
+    con_sintomas,
+    con_trasmision,
+    act_sint6m_alguno,
+    prac_no_cacharros,
+    prac_resid_camion,
+    starts_with("sc")
+  ) |>
+
+  # Descartar filas con NAs
+  drop_na()
+
+
+## Generar tabla
+datos_tabla |>
+  tbl_uvregression(
+    y = dengue,
+    include = -barrio,
+    method = glm,
+    method.args = list(family = "binomial"),
+    exponentiate = T
+  ) |>
+
+  bold_p() |>
+
+  # Formato flextable
+  as_flex_table() |>
+  autofit()
+```
