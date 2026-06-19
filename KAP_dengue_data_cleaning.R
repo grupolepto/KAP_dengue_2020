@@ -1,9 +1,10 @@
-### Limpieza de datos para el manuscrito: Seropositivity to Dengue virus (DENV) in
-### three neighborhoods in the periphery of a city with a recent history of
-### outbreaks in Argentina: what can we learn from unreported infections?
-### Fecha modificación: # 2025-10-30 12:46:08
+### Data analysis for the manuscript: Unrecognized dengue transmission in socially
+### vulnerable periurban neighborhoods of a temperate Argentine city: integrating
+### serology with knowledge, attitudes and practices
+### Author: Tamara Ricardo
+# Última modificación: 19-06-2026 14:11
 
-# Cargar paquetes ---------------------------------------------------------
+# Load packages ----------------------------------------------------------
 pacman::p_load(
   rio,
   epikit,

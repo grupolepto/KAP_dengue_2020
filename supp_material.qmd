@@ -1,0 +1,79 @@
+---
+title: "Unrecognized dengue transmission in socially vulnerable periurban neighborhoods of a temperate Argentine city: integrating serology with knowledge, attitudes and practices"
+author: 
+      - name: Diego Mendicino
+      - name: Tamara Ricardo
+      - name: Maximiliano Cristaldi
+      - name: Mariana Maglianese
+      - name: Gastón Guzmán
+      - name: Sebastián Claussen
+      - name: Romina Chiaraviglio
+      - name: Federico Costa
+      - name: Christian Ávalos
+      - name: Andrea Previtali
+    
+format: html
+---
+
+
+```{r}
+#| echo: false
+#| id: setup
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.asp = 1.25
+)
+```
+
+```{r}
+#| id: load analysis
+source("script_analysis_denv.R")
+```
+
+```{r}
+#| id: gtsummary format
+gt_format <- function(x) {
+  x |>
+    add_overall() |>
+    add_p(pvalue_fun = label_style_pvalue(digits = 3)) |>
+
+    # Table layout
+    bold_labels() |>
+    bold_p() |>
+    modify_indent(columns = label, indent = 0) |>
+    as_flex_table()
+}
+```
+
+## Supplementary material
+
+### Table S1. Demographic data of the study participants, Santa Fe, Argentina (2019-2020).
+
+```{r}
+#| id: tabs1
+tabs1 |>
+  gt_format()
+```
+
+\newpage
+
+### Table S2. Knowledge about dengue by neighborhood, Santa Fe, Argentina (2019-2020).
+
+```{r}
+#| id: tabs2
+tabs2 |>
+  gt_format()
+```
+
+### Table S3: Perceptions of the risk of dengue compared to leptospirosis among participants, Santa Fe, Argentina (2019-2020). 
+
+### Table S4: Preventive practices against dengue among the study participants, Santa Fe, Argentina (2019-2020). 
+
+### Table S5: KAPs scores by neighborhood, Santa Fe, Argentina (2019-2020). 
+
+### Figure S6: Kendall’s correlation among KAPs scores, Santa Fe, Argentina (2019-2020).
+
+### Table S7: ELISA positivity and DENV seroprevalence by neighborhood, Santa Fe, Argentina (2019-2020). 
