@@ -1,34 +1,33 @@
-### Análisis de datos: Seropositivity to Dengue virus DENV in
-### three neighborhoods in the periphery of a city with a recent history of
-### outbreaks in Argentina: what can we learn from unreported infections?
+### Data analysis for the manuscript: Unrecognized dengue transmission in socially
+### vulnerable periurban neighborhoods of a temperate Argentine city: integrating
+### serology with knowledge, attitudes and practices
 ### Author: Tamara Ricardo
-### Last update: # 2025-10-30 13:45:19
+# Última modificación: 19-06-2026 18:42
 
-# Cargar paquetes ---------------------------------------------------------
+# Load packages ----------------------------------------------------------
 pacman::p_load(
-  # Estadísticas
   glmmTMB,
-  performance,
-  DHARMa,
+  easystats,
+  # performance,
+  # DHARMa,
   gtsummary,
-  # Formato tablas
   flextable,
-  labelled,
-  # Gráficos
-  scico,
-  # Manejo de datos
+  scales,
+  # labelled,
+  cols4all,
   rio,
   janitor,
   tidyverse
 )
 
-# Cargar/limpiar datos KAP dengue ----------------------------------------
-datos <- import("clean/kap_dengue.rds")
+
+# Load data --------------------------------------------------------------
+data_denv <- import("clean/kap_dengue.rds")
 
 
-# Crear dataset con observaciones completas ------------------------------
-datos_glm <- datos |>
-  # Seleccionar columnas relevantes
+# Clean dataset for regression -------------------------------------------
+data_glm <- data_denv |>
+  # Select columns
   select(
     dengue,
     barrio,
@@ -44,46 +43,51 @@ datos_glm <- datos |>
     starts_with("sc")
   ) |>
 
-  # Descartar filas con NAs
+  # Remove NAs
   drop_na()
 
 
-# Análisis exploratorio --------------------------------------------------
-## Frecuencias x barrio
-tabyl(datos, barrio) |>
+# Exploratory analysis ---------------------------------------------------
+## Frequencies by neighborhood -----
+tabyl(data_denv, barrio) |>
   adorn_pct_formatting()
 
+## Knowledge score vs storage of water containers
+data_denv |>
+  mutate(across(
+    .cols = c(prac_no_cacharros, con_trasm_cacharros),
+    .fns = ~ factor(.x)
+  )) |>
 
-## Relación entre conocimientos y acumulación de cacharros
-datos |>
-  mutate(
-    prac_no_cacharros = factor(prac_no_cacharros),
-    con_trasm_cacharros = factor(con_trasm_cacharros)
-  ) |>
   tbl_summary(
     by = prac_no_cacharros,
+    include = c(sc_conocimientos, con_trasm_cacharros),
     type = list(
       sc_conocimientos = "continuous"
     ),
-    include = c(sc_conocimientos, con_trasm_cacharros)
+    missing = "no"
   ) |>
   add_p()
 
 
-# Síntomas febriles vs acciones
-tabyl(datos, act_sint6m_alguno, act_sint6m_acciones) |>
-  adorn_totals() |>
-  adorn_percentages() |>
+## Symptoms of febrile illness vs actions taken
+data_denv |>
+  tbl_summary(
+    by = act_sint6m_alguno,
+    include = act_sint6m_acciones,
+    digits = list(all_categorical() ~ c(0, 1))
+  ) |>
+  add_overall() |>
+  add_p()
+
+
+## Neighborhood issues ----
+tabyl(data_denv$act_problemas_barrio) |>
   adorn_pct_formatting()
 
 
-# Problemas barrio
-tabyl(datos$act_problemas_barrio)
-
-
-# Tabla 1 ----------------------------------------------------------------
-## Características de la vivienda por barrio
-tab1 <- datos |>
+# Table 1 ----------------------------------------------------------------
+tab1 <- data_denv |>
   # Generar tabla
   tbl_summary(
     by = barrio,
@@ -99,162 +103,180 @@ tab1 <- datos |>
     missing = "no",
     digits = list(all_categorical() ~ c(0, 1))
   ) |>
-
-  # Añadir significancia
   add_overall() |>
   add_p(pvalue_fun = label_style_pvalue(digits = 3)) |>
+
+  # Table layout
   bold_p() |>
-  bold_labels()
+  bold_labels() |>
+  modify_indent(columns = label, indent = 0)
 
 
-# Guardar tabla
-tab1 |>
-  as_flex_table() |>
-  font(fontname = "Calibri", part = "all") |>
-  fontsize(size = 11, part = "all") |>
-  line_spacing(space = 1.5, part = "all") |>
-  width(width = c(5, rep(2.3, 4), 1.7), unit = "cm") |>
-  save_as_docx(path = "tab1.docx")
+# Figure 3 ---------------------------------------------------------------
+## Data for the plot -----
+dat <- data_denv |>
+  # select_columns
+  select(
+    barrio,
+    contains("con_sint_"),
+    con_trasm_ns:con_trasm_viaje
+  ) |>
 
+  # Transform to long dataset
+  pivot_longer(!barrio, names_to = "cat") |>
 
-# Figura 2 ---------------------------------------------------------------
-## Datos para el gráfico
-datos_plot <- datos |>
-  # Seleccionar columnas relevantes
-  select(barrio, contains("con_sint_"), con_trasm_ns:con_trasm_viaje) |>
-
-  # Pasar a formato long
-  pivot_longer(!barrio, names_to = "categoria") |>
-
-  # Identificador columna
-  mutate(
-    variable = if_else(
-      str_detect(categoria, "con_sint"),
-      "Symptoms",
-      "Ways of trasmission"
+  # Separate columns
+  separate_wider_regex(
+    cols = cat,
+    patterns = c(
+      variable = "[^_]+_[^_]+",
+      "_",
+      category = ".*"
     )
   ) |>
 
-  # Asignar etiquetas
+  # Relabel variable
   mutate(
-    categoria = var_label(datos)[categoria] |>
-      unname() |>
-      as.character()
+    variable = fct_relabel(
+      variable,
+      ~ c("Symptoms", "Ways of transmission")
+    )
   ) |>
 
-  # Estimar frecuencias
-  count(barrio, variable, categoria, wt = value == 1) |>
+  # Relabel category
+  mutate(
+    category = fct_relabel(
+      category,
+      ~ c(
+        "Water containers",
+        "Fatigue",
+        "Headache",
+        "Diarrhea",
+        "Retro-orbital pain",
+        "Fever",
+        "Influenza-like symptoms",
+        "Malaise",
+        "Dizzyness",
+        "Myalgia",
+        "Mosquito bites",
+        "Nausea/Vomiting",
+        "Doesn't know",
+        "Bleeding",
+        "Skin rash",
+        "Travel to endemic areas"
+      )
+    ) |>
+      fct_relevel("Doesn't know", after = Inf)
+  ) |>
 
-  # Estimar frecuencias relativas x barrio
+  # Calculate frequencies
+  count(barrio, variable, category, wt = value == 1) |>
+
+  # Calculate percentages
   mutate(
     pct = case_when(
-      barrio == "CH" ~ n / nrow(datos |> filter(barrio == "CH")),
-      barrio == "CS" ~ n / nrow(datos |> filter(barrio == "CS")),
-      barrio == "VP" ~ n / nrow(datos |> filter(barrio == "VP"))
+      barrio == "CH" ~ n / nrow(data_denv |> filter(barrio == "CH")),
+      barrio == "CS" ~ n / nrow(data_denv |> filter(barrio == "CS")),
+      barrio == "VP" ~ n / nrow(data_denv |> filter(barrio == "VP"))
     )
-  ) |>
-
-  # Unir niveles
-  mutate(
-    categoria = fct_collapse(
-      categoria,
-      "Doesn't know" = c("None", "Doesn't know any way of transmission")
-    )
-  ) |>
-
-  # Enviar "No sé" al final
-  mutate(categoria = fct_relevel(categoria, "Doesn't know", after = Inf))
-
-
-## Generar gráfico
-datos_plot |>
-  ggplot(aes(x = categoria, y = pct, fill = barrio)) +
-  geom_col(position = "dodge", color = "grey50") +
-  facet_wrap(~variable, scales = "free_x") +
-
-  # Formato
-  scale_fill_scico_d(palette = "lipari") +
-  scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
-  labs(x = NULL, y = "Frequency (%)") +
-
-  # Tema
-  theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    axis.text.x = element_text(angle = 90, size = 10, face = "bold"),
-    strip.text = element_text(size = 11, face = "bold")
   )
 
 
-# Guarda figura
-ggsave("figure2.png", width = 16, height = 14, units = "cm")
+## Generate plot -----
+fig3 <- dat |>
+  ggplot(aes(x = category, y = pct, fill = barrio)) +
+  facet_wrap(~variable, scales = "free_x") +
+  geom_col(position = "dodge", color = "grey50") +
+  scale_fill_discrete_c4a_seq(palette = "blue_fluoride", name = NULL) +
+  scale_y_continuous(name = "Frequency", labels = scales::label_percent()) +
+  scale_x_discrete(name = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90))
 
 
-# Figura 3 ---------------------------------------------------------------
-## Datos para el gráfico
-datos_plot <- datos |>
+## Save plot -----
+ggsave(fig3, filename = "figure3.png", width = 16, units = "cm")
 
+
+# Figure 4 ---------------------------------------------------------------
+## Plot data -----
+dat <- data_denv |>
   select(barrio, starts_with("act_mas")) |>
 
-  # Base long
-  pivot_longer(!barrio, names_to = "variable", values_to = "categoria") |>
+  # Transform to long format
+  pivot_longer(!barrio, names_to = "variable", values_to = "category") |>
 
-  # Asignar etiquetas variable
+  # Relabel variable
   mutate(
-    variable = var_label(datos)[variable] |>
-      unname() |>
-      as.character()
+    variable = fct_relabel(
+      variable,
+      ~ c(
+        "More prevalent",
+        "More risk of contagion",
+        "More fear of contagion",
+        "More publicity"
+      )
+    )
   ) |>
 
-  # Modificar niveles categoría
+  # Relabel category
   mutate(
-    categoria = case_when(
-      categoria == "Igual" ~ "Both",
-      categoria == "Ninguna/no sabe" | is.na(categoria) ~ "None/doesn't know",
-      .default = categoria
-    ) |>
-      fct_relevel("Both", "None/doesn't know", after = 2)
+    category = if_else(
+      category %in% c(NA, "None/not sure"),
+      "None/doesn't know",
+      category
+    )
   ) |>
 
-  # Estimar frecuencias
-  count(barrio, categoria, variable) |>
+  # Estimate frequencys
+  count(barrio, variable, category) |>
 
-  # Estimar frecuencias relativas x barrio
+  # Estimate percentages
   mutate(
     pct = case_when(
-      barrio == "CH" ~ n / nrow(datos |> filter(barrio == "CH")),
-      barrio == "CS" ~ n / nrow(datos |> filter(barrio == "CS")),
-      barrio == "VP" ~ n / nrow(datos |> filter(barrio == "VP"))
+      barrio == "CH" ~ n / nrow(data_denv |> filter(barrio == "CH")),
+      barrio == "CS" ~ n / nrow(data_denv |> filter(barrio == "CS")),
+      barrio == "VP" ~ n / nrow(data_denv |> filter(barrio == "VP"))
     )
   )
 
 
-## Generar gráfico
-datos_plot |>
-  ggplot(aes(x = categoria, y = pct, fill = barrio)) +
-  geom_col(position = "dodge", color = "grey50") +
+## Generate plot -----
+fig4 <- dat |>
+  ggplot(aes(x = category, y = pct, fill = barrio)) +
   facet_wrap(~variable, scales = "free_x") +
-
-  # Formato
-  scale_fill_scico_d(palette = "lipari") +
-  scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
-  labs(x = NULL, y = "Frequency (%)") +
-
-  # Tema
+  geom_col(position = "dodge", color = "grey50") +
+  scale_fill_discrete_c4a_seq(palette = "blue_fluoride", name = NULL) +
+  scale_y_continuous(name = "Frequency", labels = scales::label_percent()) +
+  scale_x_discrete(name = NULL) +
   theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    axis.text.x = element_text(angle = 90, size = 10, face = "bold"),
-    strip.text = element_text(size = 11, face = "bold")
-  )
+  theme(axis.text.x = element_text(angle = 90))
 
 
-# Guarda figura
-ggsave("figure3.png", width = 16, height = 14, units = "cm")
+## Save plot -----
+ggsave(fig4, filename = "figure4.png", width = 16, units = "cm")
 
 
-# Factores que afectan la seropositividad ---------------------------------
-## Barrio como intercepto aleatorio
+# Table 2: Univariate regressions ----------------------------------------
+tab2 <- data_glm |>
+  tbl_uvregression(
+    y = dengue,
+    method = glmmTMB::glmmTMB,
+    formula = "{y} ~ {x} + (1 | barrio)",
+    method.args = list(family = binomial),
+    hide_n = TRUE,
+    exponentiate = TRUE
+  ) |> 
+  
+  # Table layout
+  bold_p() |>
+  bold_labels() |>
+  modify_indent(columns = label, indent = 0)
+
+
+
+# Multivariate regressions -----------------------------------------------
+## Neighborhood as a random intercept -----
 full_glmm1 <- glmmTMB(
   dengue ~ viv_tipo_calle +
     viv_baldios_dist +
@@ -263,10 +285,10 @@ full_glmm1 <- glmmTMB(
     prac_cacharros +
     (1 | barrio),
   family = binomial,
-  data = datos_glm
+  data = data_glm
 )
 
-## Barrio como intercepto aleatorio y efecto fijo
+## Neighborhood as a fixed and random effect -----
 full_glmm2 <- glmmTMB(
   dengue ~ viv_tipo_calle +
     viv_baldios_dist +
@@ -276,10 +298,11 @@ full_glmm2 <- glmmTMB(
     barrio +
     (1 | barrio),
   family = binomial,
-  data = datos_glm
+  data = data_glm
 )
 
-## Barrio como efecto fijo
+
+## Neighborhood as a fixed effect -----
 full_glm <- glmmTMB(
   dengue ~ viv_tipo_calle +
     viv_baldios_dist +
@@ -288,7 +311,7 @@ full_glm <- glmmTMB(
     prac_cacharros +
     barrio,
   family = binomial,
-  data = datos_glm
+  data = data_glm
 )
 
 # Compara modelos full
