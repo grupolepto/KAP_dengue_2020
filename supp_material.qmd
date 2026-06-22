@@ -1,18 +1,26 @@
 ---
-title: "Unrecognized dengue transmission in socially vulnerable periurban neighborhoods of a temperate Argentine city: integrating serology with knowledge, attitudes and practices"
-author: 
-      - name: Diego Mendicino
-      - name: Tamara Ricardo
-      - name: Maximiliano Cristaldi
-      - name: Mariana Maglianese
-      - name: Gastón Guzmán
-      - name: Sebastián Claussen
-      - name: Romina Chiaraviglio
-      - name: Federico Costa
-      - name: Christian Ávalos
-      - name: Andrea Previtali
+title: "Supplementary material"
+# author: 
+#       - name: Diego Mendicino
+#       - name: Tamara Ricardo
+#       - name: Maximiliano Cristaldi
+#       - name: Mariana Maglianese
+#       - name: Gastón Guzmán
+#       - name: Sebastián Claussen
+#       - name: Romina Chiaraviglio
+#       - name: Federico Costa
+#       - name: Christian Ávalos
+#       - name: Andrea Previtali
     
-format: html
+format: 
+  pdf:
+    papersize: a4
+    mainfont: "Palatino Linotype"
+    fontsize: 10pt
+    geometry:
+      - top=25mm
+      - left=25mm
+      - heightrounded
 ---
 
 
@@ -29,31 +37,58 @@ knitr::opts_chunk$set(
 ```
 
 ```{r}
-#| id: load analysis
-source("script_analysis_denv.R")
+#| id: Load packages
+pacman::p_load(
+  gtsummary,
+  flextable,
+  epiR,
+  epikit,
+  rio,
+  janitor,
+  tidyverse
+)
+```
+
+```{r}
+#| id: Load data
+data <- import("clean/kap_dengue.rds")
 ```
 
 ```{r}
 #| id: gtsummary format
 gt_format <- function(x) {
   x |>
-    add_overall() |>
+
     add_p(pvalue_fun = label_style_pvalue(digits = 3)) |>
 
     # Table layout
     bold_labels() |>
     bold_p() |>
     modify_indent(columns = label, indent = 0) |>
-    as_flex_table()
+    remove_footnote_header(columns = all_stat_cols()) |>
+    as_flex_table() |>
+    font(fontname = "Palatino Linotype", part = "all") |>
+    fontsize(size = 10, part = "all") |>
+    width(width = c(4, 2.5, 2.5, 2.5, 2.5, 1.5), unit = "cm")
 }
 ```
 
-## Supplementary material
+<!-- ## Supplementary material -->
 
 ### Table S1. Demographic data of the study participants, Santa Fe, Argentina (2019-2020).
 
 ```{r}
 #| id: tabs1
+tabs1 <- data |>
+  tbl_summary(
+    by = barrio,
+    include = c(genero, educacion, ocupacion),
+    digits = list(all_categorical() ~ c(0, 1)),
+    missing = "no"
+  ) |>
+  add_overall()
+
+# Show table
 tabs1 |>
   gt_format()
 ```
@@ -64,16 +99,189 @@ tabs1 |>
 
 ```{r}
 #| id: tabs2
+tabs2 <- data |>
+  tbl_summary(
+    by = barrio,
+    include = c(
+      conoce_dengue:con_alguien_hogar,
+      dengue_previo,
+      con_sint_fiebre:con_sint_dol_ojos,
+      con_sint_ns,
+      con_trasm_mosquito:con_trasm_viaje,
+      con_trasm_ns
+    ),
+    digits = list(all_categorical() ~ c(0, 1)),
+    missing = "no"
+  ) |>
+  add_overall() |>
+
+  # Agrupar variables síntomas
+  add_variable_group_header(
+    header = "Dengue symptoms",
+    variables = con_sint_fiebre:con_sint_ns
+  ) |>
+
+  # Agrupar variables transmisión
+  add_variable_group_header(
+    header = "Ways of transmission",
+    variables = con_trasm_mosquito:con_trasm_ns
+  )
+
+# Show table
 tabs2 |>
   gt_format()
 ```
 
+\newpage
+
 ### Table S3: Perceptions of the risk of dengue compared to leptospirosis among participants, Santa Fe, Argentina (2019-2020). 
+
+```{r}
+#| id: tabs3
+tabs3 <- data |>
+  # Generar tabla
+  tbl_summary(
+    by = barrio,
+    include = c(
+      act_mas_miedo:act_sint6m_acciones,
+      act_problemas_barrio_cat:act_mejoras_barrio
+    ),
+    missing = "no",
+    digits = list(all_categorical() ~ c(0, 1))
+  ) |>
+
+  # Añadir significancia
+  add_overall() |>
+
+  # Agrupar variables síntomas febrilews
+  add_variable_group_header(
+    header = "Febrile illness symptoms (6 months)",
+    variables = act_sint6m_alguno:act_sint6m_acciones
+  )
+
+# Show table
+tabs3 |>
+  gt_format()
+```
+
+\newpage
 
 ### Table S4: Preventive practices against dengue among the study participants, Santa Fe, Argentina (2019-2020). 
 
+```{r}
+#| id: tabs4
+tabs4 <- data |>
+  tbl_summary(
+    by = barrio,
+    include = starts_with("prac") & !matches("prac_cacharros"),
+    missing = "no",
+    digits = list(all_categorical() ~ c(0, 1))
+  ) |>
+
+  # Añadir significancia
+  add_overall() |>
+
+  # Agrupar variables síntomas
+  add_variable_group_header(
+    header = "Avoids storage of environmental water",
+    variables = prac_no_cacharros:prac_no_agua_lluvia
+  ) |>
+
+  # Agrupar variables transmisión
+  add_variable_group_header(
+    header = "Garbage disposal",
+    variables = prac_resid_camion:prac_resid_no_rio
+  )
+
+# Show table
+tabs4 |>
+  gt_format()
+```
+
+\newpage
+
 ### Table S5: KAPs scores by neighborhood, Santa Fe, Argentina (2019-2020). 
+
+```{r}
+#| id: tabs5
+tabs5 <- data |>
+  tbl_summary(
+    by = barrio,
+    include = starts_with("sc_"),
+    type = list(starts_with("sc_") ~ "continuous")
+  ) |>
+
+  # Añadir significancia
+  add_overall()
+
+# Show table
+tabs5 |>
+  gt_format()
+```
+
+\newpage
 
 ### Figure S6: Kendall’s correlation among KAPs scores, Santa Fe, Argentina (2019-2020).
 
+```{r}
+#| id: figs6
+data |>
+  select(
+    "Knowledge" = sc_conocimientos,
+    "Attitudes" = sc_actitudes,
+    "Practices" = sc_practicas
+  ) |>
+
+  GGally::ggcorr(
+    method = c("pairwise", "kendall"),
+    label = TRUE,
+    label_round = 3
+  ) +
+
+  scico::scale_fill_scico(palette = "managua", direction = -1, begin = .75)
+```
+
+\newpage
+
 ### Table S7: ELISA positivity and DENV seroprevalence by neighborhood, Santa Fe, Argentina (2019-2020). 
+
+```{r}
+#| id: tabs7
+# Raw frequencies
+tabs7 <- data |>
+  tabyl(barrio, ELISA_dengue) |>
+  adorn_totals(where = c("row", "col")) |>
+  (\(x) {
+    epi.prev(
+      pos = x$POS,
+      tested = x$Total,
+      se = 0.96,
+      sp = 0.93,
+      units = 1
+    ) |>
+      list_rbind(names_to = "name")
+  })() |>
+
+  mutate(Site = rep(c("CH", "CS", "VP", "Total"), 8)) |>
+
+  unite_ci("value", est, lower, upper, m100 = FALSE) |>
+  pivot_wider(names_from = name, values_from = value)
+
+
+# Show table
+tabs7 |>
+  select(
+    Site,
+    "Positives Test" = test.positive,
+    "Positives True" = true.positive,
+    "Positives False" = false.positive,
+    "Seroprevalence Apparent" = ap,
+    "Seroprevalence True" = tp
+  ) |>
+
+  flextable() |>
+  font(fontname = "Palatino Linotype", part = "all") |>
+  fontsize(size = 10, part = "all") |>
+  separate_header(split = " ", opts = "span-top") |>
+  width(width = rep(2.5, 6), unit = "cm")
+```
